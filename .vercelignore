@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.vscode/
+web/tests/
+node_modules/
+*.pyc

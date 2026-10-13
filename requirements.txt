@@ -1,0 +1,2 @@
+# Web host (this is what Vercel installs)
+flask>=3.0

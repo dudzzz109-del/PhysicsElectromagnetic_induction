@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electromagnetic Induction — Interactive 3D Simulation</title>
+<meta name="description" content="Bar magnet passing through a conducting coil: Faraday's law, Lenz's law, live flux / EMF / current graphs.">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<style>
+  :root { color-scheme: dark; --bg:#0b1020; --card:#111a2e; --line:#26334f; --txt:#e2e8f0; --mut:#94a3b8; --acc:#38bdf8; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding:10px 16px 0; }
+  header h1 { margin:0; font-size:18px; }
+  header p { margin:2px 0 0; color:var(--mut); font-size:12.5px; }
+  .layout { display:grid; grid-template-columns: minmax(0,1fr) 410px; gap:12px; padding:12px 16px 20px; align-items:start; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  #banner { padding:8px 12px; margin-bottom:8px; min-height:54px; }
+  #banner b { display:block; font-size:14px; }
+  #banner span { color:var(--mut); font-size:12.5px; }
+  #stage { position:relative; height: clamp(340px, calc(100vh - 250px), 640px); overflow:hidden; }
+  #stage canvas { display:block; width:100%; height:100%; }
+  #hint { position:absolute; left:10px; bottom:8px; font-size:11.5px; color:var(--mut); pointer-events:none; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; align-items:center; }
+  button { background:#16223a; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  button.play { color:#4ade80; } button.pause { color:#fbbf24; } button.reset { color:#f87171; } button.mode { color:#86efac; }
+  .sliders { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px; padding:8px 12px; }
+  .sliders label { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+  .sliders input[type=range] { width:150px; }
+  .sliders output { min-width:34px; color:var(--acc); font-variant-numeric:tabular-nums; }
+  .right { display:flex; flex-direction:column; gap:10px; }
+  .graphs { padding:6px; display:flex; flex-direction:column; gap:6px; }
+  .graphs h2 { margin:2px 6px 0; font-size:12px; letter-spacing:.04em; color:var(--acc); }
+  .graphs canvas { width:100%; height:138px; display:block; border-radius:6px; }
+  table.read { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.read td { padding:3px 10px; border-bottom:1px solid #1b2742; }
+  table.read td:last-child { text-align:right; font-variant-numeric:tabular-nums; color:#f8fafc; }
+  table.read td:first-child { color:var(--mut); }
+  details { padding:8px 12px; font-size:12.5px; color:var(--mut); }
+  details summary { cursor:pointer; color:var(--txt); }
+  code { color:#fde68a; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Electromagnetic Induction &mdash; a magnet passing through a coil</h1>
+  <p>Faraday's law &amp; Lenz's law in real time. Drag to rotate the view, scroll to zoom.</p>
+</header>
+
+<div class="layout">
+  <!-- LEFT: 3D simulation -->
+  <div>
+    <div id="banner" class="card"><b id="banTitle"></b><span id="banSub"></span></div>
+    <div id="stage" class="card"><div id="hint">drag = rotate &nbsp;&middot;&nbsp; wheel = zoom</div></div>
+
+    <div class="controls">
+      <button id="btnPlay" class="play">&#9654; PLAY</button>
+      <button id="btnPause" class="pause">&#10073;&#10073; PAUSE</button>
+      <button id="btnReset" class="reset">&#10227; RESET</button>
+      <button id="btnReverse">&#8644; REVERSE DIRECTION</button>
+      <button id="btnMode" class="mode"></button>
+      <button id="btnView">&#8962; RESET VIEW</button>
+    </div>
+    <div class="sliders card">
+      <label>Magnet speed <input id="slSpeed" type="range" min="0.2" max="3.5" step="0.1" value="1"><output id="outSpeed">1.0x</output></label>
+      <label>Coil turns (N) <input id="slTurns" type="range" min="1" max="60" step="1" value="20"><output id="outTurns">20</output></label>
+      <label>Magnet strength <input id="slStrength" type="range" min="0.2" max="3" step="0.1" value="1"><output id="outStrength">1.0x</output></label>
+    </div>
+  </div>
+
+  <!-- RIGHT: live graphs + readouts -->
+  <div class="right">
+    <div class="graphs card">
+      <h2>LIVE GRAPHS &mdash; update in real time</h2>
+      <canvas id="gFlux"></canvas>
+      <canvas id="gEmf"></canvas>
+      <canvas id="gCurr"></canvas>
+    </div>
+    <div class="card">
+      <table class="read">
+        <tr><td>Magnet position</td><td id="rPos"></td></tr>
+        <tr><td>Magnet velocity</td><td id="rVel"></td></tr>
+        <tr><td>Magnetic field B (at coil)</td><td id="rB"></td></tr>
+        <tr><td>Coil area A</td><td id="rA"></td></tr>
+        <tr><td>Number of turns N</td><td id="rN"></td></tr>
+        <tr><td>Magnetic flux &Phi;</td><td id="rFlux"></td></tr>
+        <tr><td>d&Phi;/dt</td><td id="rDphi"></td></tr>
+        <tr><td>Induced EMF = &minus;N d&Phi;/dt</td><td id="rEmf"></td></tr>
+        <tr><td>Current I = EMF / R</td><td id="rCurr"></td></tr>
+        <tr><td>Galvanometer deflection</td><td id="rNeedle"></td></tr>
+        <tr><td>Current direction</td><td id="rDir"></td></tr>
+        <tr><td>Lamp (P = I&sup2;R)</td><td id="rLamp"></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <details>
+        <summary>How it works</summary>
+        <p>A changing magnetic flux through the coil induces an EMF: <code>EMF = &minus;N d&Phi;/dt</code> (Faraday). The induced current opposes the change in flux (Lenz).
+        In <b>PASS THROUGH</b> mode the magnet goes in one side of the coil and out the other: the field through the coil reverses when the N pole crosses it, so the flux changes sign and the current reverses.
+        <b>BOUNCE</b> mode: the magnet goes in and comes back out the same side.</p>
+        <p>Current direction is given as seen from the right (the side the magnet starts on). Needle: left = negative current, right = positive.</p>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
