@@ -20,7 +20,7 @@ Demonstrates:
 How to run
 ----------
   Desktop (VPython, opens your browser on localhost):
-      pip install -r requirements-desktop.txt
+      pip install -r requirements-desktop.txt   (includes Flask, which main.py imports)
       python main.py
 
   Website host (same simulation, as a browser app from the web/ folder):
@@ -49,34 +49,31 @@ WEB_DIR = Path(_HERE) / "web"
 
 # ---------------------------------------------------------------------------------------
 # WEB HOST  (WSGI app named `app` — this is what Vercel / gunicorn / `flask run` look for)
-# Flask is optional: the desktop app below works without it.
+# It must be a plain top-level `app = Flask(...)` so Vercel can detect it.
 # ---------------------------------------------------------------------------------------
-try:
-    from flask import Flask, abort, send_from_directory
-except ImportError:          # desktop-only install
-    Flask = None
+from flask import Flask, abort, send_from_directory
 
-if Flask is not None:
-    app = Flask(__name__, static_folder=None)
+app = Flask(__name__, static_folder=None)
 
-    @app.get("/")
-    def home():
-        """The simulation page is served at the root URL — no /index.html needed."""
-        return send_from_directory(WEB_DIR, "index.html")
 
-    @app.get("/healthz")
-    def healthz():
-        return {"status": "ok"}
+@app.get("/")
+def home():
+    """The simulation page is served at the root URL — no /index.html needed."""
+    return send_from_directory(WEB_DIR, "index.html")
 
-    @app.get("/<path:filename>")
-    def assets(filename):
-        """JS modules, bundled three.js, etc. from web/ (tests are not published)."""
-        if filename.startswith("tests/") or filename.startswith("."):
-            abort(404)
-        # send_from_directory refuses paths that escape WEB_DIR (no directory traversal)
-        return send_from_directory(WEB_DIR, filename)
-else:
-    app = None
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+@app.get("/<path:filename>")
+def assets(filename):
+    """JS modules, bundled three.js, etc. from web/ (tests are not published)."""
+    if filename.startswith("tests/") or filename.startswith("."):
+        abort(404)
+    # send_from_directory refuses paths that escape WEB_DIR (no directory traversal)
+    return send_from_directory(WEB_DIR, filename)
 
 
 def main():
@@ -120,8 +117,6 @@ def main():
 
 
 def run_web(host, port):
-    if app is None:
-        sys.exit("Flask is not installed.  Run:  pip install -r requirements.txt")
     print(f"Serving the simulation on http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
     app.run(host=host, port=port)
 
